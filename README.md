@@ -26,3 +26,28 @@ ros2 launch loop_phase_one_pkg sim.launch.py seed:=42
 - `worlds/course.sdf`: obstacle course
 - `models/red_cube/`: vehicle with lidar, velocity control, odometry
 - `scripts/navigator.py`: waypoint generation and obstacle avoidance
+
+## Troubleshooting
+
+**Cube drives erratically, or the wrong world loads:** old simulation processes are probably still running (for example, after stopping with Ctrl+Z instead of Ctrl+C). Kill them and relaunch:
+```bash
+pkill -9 -f "gz sim"; pkill -9 -f parameter_bridge; pkill -9 -f navigator.py
+ros2 launch loop_phase_one_pkg sim.launch.py seed:=42
+```
+Always stop the simulation with **Ctrl+C**.
+
+**`executable 'navigator.py' not found`:** the script lost its executable permission.
+```bash
+chmod +x scripts/navigator.py
+```
+
+**Lidar shows no rays / `/scan` is empty (common in VMs):**
+```bash
+export LIBGL_ALWAYS_SOFTWARE=1
+```
+then relaunch.
+
+**`RTPS_TRANSPORT_SHM Error` in the output:** harmless. To clear it:
+```bash
+rm -f /dev/shm/fastrtps_* /dev/shm/sem.fastrtps_*
+```
