@@ -35,12 +35,20 @@ class Navigator(Node):
         seed = self.declare_parameter('seed', 0).value
         random.seed(seed or None)                   # 0 = different waypoints every run
         self.goals = random_waypoints(4)
+        self.total = len(self.goals)
         self.get_logger().info(f'Waypoints: {[(round(x, 1), round(y, 1)) for x, y in self.goals]}')
  
         self.x = self.y = self.yaw = None
         self.front = self.left = self.right = float('inf')
         self.goal_start = self.now()
  
+        self.turn_dir = 0.0        
+        self.last_blocked = 0.0    
+        self.commit_until = 0.0    
+        self.backup_until = 0.0    
+        self.check_time = self.goal_start
+        self.check_pos = None
+
         self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
         self.create_subscription(Odometry, '/odom', self.on_odom, 10)
         self.create_subscription(LaserScan, '/scan', self.on_scan, 10)
@@ -76,19 +84,45 @@ class Navigator(Node):
  
         # Arrived, or taking too long -> move on to the next waypoint
         if dist < GOAL_TOLERANCE or self.now() - self.goal_start > TIMEOUT:
-            result = 'Reached' if dist < GOAL_TOLERANCE else 'Gave up on'
-            self.get_logger().info(f'{result} waypoint ({gx:.1f}, {gy:.1f})')
+            n = self.total - len(self.goals) + 1
+            if dist < GOAL_TOLERANCE:
+                self.get_logger().info(f'Reached waypoint {n}: ({gx:.1f}, {gy:.1f})')
+            else:
+                self.get_logger().warn(f'Skipped waypoint {n}: ({gx:.1f}, {gy:.1f})')
             self.goals.pop(0)
-            self.goal_start = self.now()
-            if not self.goals:
-                self.get_logger().info('All waypoints done')
-            return
+            self.goal_start = self.check_time = self.now()
+            self.check_pos = None
+            self.turn_dir = 0.0
+        
+        now = self.now()
+
+        # Stuck check: if it moved less than 10 cm in 5 s, back up
+        if self.check_pos is None:
+            self.check_pos = (self.x, self.y)
+        elif now - self.check_time > 5.0:
+            if math.dist((self.x, self.y), self.check_pos) < 0.1:
+                self.backup_until = now + 1.5
+            self.check_time, self.check_pos = now, (self.x, self.y)
  
         cmd = Twist()
-        if self.front < SAFE_DISTANCE:
-            # Blocked: turn in place toward the side with more room
-            cmd.angular.z = 1.0 if self.left > self.right else -1.0
+        if now < self.backup_until:
+            # Stuck: reverse while turning
+            cmd.linear.x = -0.3
+            cmd.angular.z = self.turn_dir or 1.0
+        elif self.front < SAFE_DISTANCE:
+            # Blocked: pick a side once and keep turning that way (no left/right flip-flop)
+            if self.turn_dir == 0.0:
+                self.turn_dir = 1.0 if self.left > self.right else -1.0
+            cmd.angular.z = self.turn_dir
+            self.last_blocked = now
+            self.commit_until = now + 1.5
+        elif now < self.commit_until:
+            # Just got clear: drive straight a bit to get past the obstacle's edge
+            cmd.linear.x = 0.3
         else:
+            # Forget the chosen side once we've been clear for a while
+            if now - self.last_blocked > 3.0:
+                self.turn_dir = 0.0
             # Clear: steer toward the goal
             error = math.atan2(gy - self.y, gx - self.x) - self.yaw
             error = math.atan2(math.sin(error), math.cos(error))    # wrap to [-pi, pi]

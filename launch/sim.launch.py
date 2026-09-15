@@ -16,8 +16,7 @@ def generate_launch_description():
         ExecuteProcess(cmd=['gz', 'sim', '-r', world], output='screen'),
  
         # Put the cube in the world
-        Node(package='ros_gz_sim', executable='create',
-             arguments=['-name', 'red_cube', '-file', cube, '-z', '0.25']),
+        Node(package='ros_gz_sim', executable='create', arguments=['-name', 'red_cube', '-file', cube, '-z', '0.25']),
  
         # Connect Gazebo topics to ROS (] = ROS->Gazebo, [ = Gazebo->ROS)
         Node(package='ros_gz_bridge', executable='parameter_bridge',
@@ -27,7 +26,5 @@ def generate_launch_description():
                         '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock']),
  
         # The driving logic
-        Node(package='loop_phase_one_pkg', executable='navigator.py',
-             parameters=[{'use_sim_time': True, 'seed': 42}],
-             output='screen'),
+        Node(package='loop_phase_one_pkg', executable='navigator.py', parameters=[{'use_sim_time': True}], output='screen')
     ])
