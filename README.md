@@ -2,6 +2,9 @@
 
 A cube in Gazebo Harmonic drives itself to random waypoints while avoiding obstacles with a 2D lidar.
 
+## Video
+[Software Challenge One Demonstration](https://www.youtube.com/watch?v=y4UdAa3LrQs)
+
 ## Build
 ```bash
 mkdir -p ~/ws/src && cd ~/ws/src
